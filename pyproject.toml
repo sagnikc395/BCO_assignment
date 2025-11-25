@@ -1,0 +1,10 @@
+[project]
+name = "bco-assignment"
+version = "0.1.0"
+requires-python = ">=3.11.2"
+dependencies = [
+    "gymnasium==0.29.1",
+    "matplotlib==3.8.2",
+    "pygame==2.5.2",
+    "torch==2.2.0",
+]

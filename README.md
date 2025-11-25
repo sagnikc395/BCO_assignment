@@ -1,7 +1,8 @@
 # Homework 1 for CS 690 Human-Centric Machine Learning
 
 ### Recommended: Installation Ubuntu
-First it is recommended that you install anaconda: <https://www.anaconda.com/products/distribution> a popular python distribution and software management platform.
+~First it is recommended that you install anaconda: <https://www.anaconda.com/products/distribution> a popular python distribution and software management platform.~
+Can just use `uv`.
 
 Next, git clone this repository.
 
@@ -9,12 +10,21 @@ Next navigate to the repository
 ```
 cd BCO_assignment
 ```
-then install the dependencies and create a Conda environment called imitation_learning by running:
+~then install the dependencies and create a Conda environment called imitation_learning by running:~
 ```
-conda create -n imitation_learning python=3.9 -y
-conda activate imitation_learning
-pip install -r requirements.txt
+~conda create -n imitation_learning python=3.9 -y~
+~conda activate imitation_learning~
+~pip install -r requirements.txt~
 ```
+
+- Install this as:
+```
+uv init --bare
+uv venv
+source .venv/bin/activate
+uv add torch matplotlib gymnasium pygame
+```
+
 
 
 ### PyTorch Primer
