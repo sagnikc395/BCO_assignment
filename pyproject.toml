@@ -1,0 +1,12 @@
+[project]
+name = "bco-assignment"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "enum34>=1.1.10",
+    "gym>=0.26.2",
+    "matplotlib>=3.9.4",
+    "opencv-python>=5.0.0.93",
+]
