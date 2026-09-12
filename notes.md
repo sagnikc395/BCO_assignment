@@ -32,3 +32,17 @@ an agent that uses the observations and rewards from the environments to learn a
   4. info: provides additional information depending on the environment, such as the number of lives left, or general information that may be conducive in debugging.
 
    
+### Spaces
+
+- Spaces are DS provided by the Gym library, which describes the valid values of observations and actions in RL environments.
+- all of these inherit from the `gym.Space` base class.
+- `Box()` space represents an n-dimensional continuous space. This space is bounded, meaning it has specified upper and lower limits for each dimension.
+- these bounds define the range of legitimate values that observations can take and can be accessed using the high and low attributes of Box space.
+- `Discrete(n)` box describes a discrete space with `[0...n-1]` possible values.
+
+### Wrappers
+- Provides us with the functionality to modify various parts of an environment to suit our needs.
+- Wrapper class
+
+
+### 
