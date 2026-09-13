@@ -42,3 +42,21 @@ if __name__ == "__main__":
     params = list(net.parameters())
     print(len(params))
     print(params[0].size())
+
+    # a random 32*32 input
+    input = torch.randn(1, 1, 32, 32)
+    out = net(input)
+    print(out)
+
+    # zero the gradient buffers of all parameters and backprops with random gradients
+    net.zero_grad()
+    out.backward(torch.randn(1, 10))
+
+    # loss
+    output = net(input)
+    target = torch.randn(10)  # dummy target
+    target = target.view(1, -1)  # make it the same shape as output
+    criterion = nn.MSELoss()
+
+    loss = criterion(output, target)
+    print(loss)

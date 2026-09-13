@@ -46,8 +46,13 @@ training.
   - after defining the `forward` and the `backward` functions( where the gradients are computed)
   , is automatically defined by using `autograd`. We can use any of the Tensor operations in the `forward` fuction.
 
-  
+- loss function takes the (output,target) pair of inputs, and computes a vlaue that estimates how far away the output is from the target.
+- several different loss functions under the nn package.
+- backprop:
+  - to backpropogate the error all we have to do is to do `loss.backward()`
+  - need to clear the existing gradients though , else the gradients will be accumulated to exsiting gradients.
 
+- 
 
 ## Training a Classifier
 
