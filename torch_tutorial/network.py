@@ -60,3 +60,33 @@ if __name__ == "__main__":
 
     loss = criterion(output, target)
     print(loss)
+
+    net.zero_grad()  # zeros the gradient buffers of all parameters
+
+    print("conv1.bias.grad before backward")
+    print(net.conv1.bias.grad)
+
+    loss.backward()
+
+    print("conv1.bias.grad after backward")
+    print(net.conv1.bias.grad)
+
+    # now updating the weights
+    learning_rate = 0.01
+    for f in net.parameters():
+        with torch.no_grad():
+            f -= f.grad * learning_rate
+
+    # using optimizer with SGD
+    import torch.optim as optim
+
+    # creating the optimizer
+    optimizer = optim.SGD(net.parameters(), lr=0.01)
+
+    # training loop
+    optimizer.zero_grad()  # zeros the gradient buffers
+    output = net(input)
+    loss = criterion(output, target)
+    loss.backward()
+    # does the update
+    optimizer.step()
