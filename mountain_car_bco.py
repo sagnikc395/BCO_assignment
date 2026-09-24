@@ -44,6 +44,31 @@ def collect_human_demos(num_demos):
     return demos
 
 
+def collect_policy_interaction_data(pi, num_episodes, epsilon=0.3):
+    # roll out the current policy with epsilon-greedy exploration and record (s,s',a). used for the BCO(alpha) post demo phase, learned policy will visit regions of the state space that a uniformly random policy almost never reaches and the epsilon noise keeps every action represented so the inverse dynamics model can tell them apart.
+    states, next_states, actions = [], [], []
+    env = gym.make("MountainCar-v0")
+    for _ in range(num_episodes):
+        obs, _ = env.reset()
+        done = False
+        while not done:
+            if np.random.rand() < epsilon:
+                a = env.action_space.sample()
+            else:
+                with torch.no_grad():
+                    a = torch.argmax(
+                        pi(torch.from_numpy(obs).float().unsqueeze(0))
+                    ).item()
+            next_obs, reward, terminated, truncated, info = env.step(a)
+            done = terminated or truncated
+            states.append(obs)
+            next_states.append(next_obs)
+            actions.append(a)
+            obs = next_obs
+    env.close()
+    return np.array(states), np.array(next_states), np.array(actions)
+
+
 def torchify_demos(sas_pairs):
     states = []
     actions = []
@@ -187,6 +212,15 @@ def train_inverse_dynamics(inv_dyn, states, next_states, actions, num_iters, lr=
             print(
                 f"inverse dynamics iteration {i} , loss {loss.item():.4f} train accuracy: {acc:.3f}"
             )
+
+
+# convert to tensors
+def to_tensors(states, next_states, actions):
+    return (
+        torch.from_numpy(np.asarray(states)).float().to(device),
+        torch.from_numpy(np.asarray(next_states)).float().to(device),
+        torch.from_numpy(np.asarray(actions)).long().to(device),
+    )
 
 
 def inverse_dynamics(obs, next_obs, num_inv_dyn_iters):
