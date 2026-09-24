@@ -1,0 +1,197 @@
+\documentclass[12pt]{article}%
+\usepackage{amsfonts}
+\usepackage{fancyhdr}
+\usepackage{comment}
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=2.2cm, right=2.2cm]%
+{geometry}
+\usepackage{times}
+\usepackage{amsmath}
+\usepackage{changepage}
+\usepackage{amssymb}
+\usepackage{graphicx}%
+\usepackage{hyperref}
+\setcounter{MaxMatrixCols}{30}
+\newtheorem{theorem}{Theorem}
+\newtheorem{acknowledgement}[theorem]{Acknowledgement}
+\newtheorem{algorithm}[theorem]{Algorithm}
+\newtheorem{axiom}{Axiom}
+\newtheorem{case}[theorem]{Case}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{conclusion}[theorem]{Conclusion}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{criterion}[theorem]{Criterion}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{notation}[theorem]{Notation}
+\newtheorem{problem}[theorem]{Problem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{solution}[theorem]{Solution}
+\newtheorem{summary}[theorem]{Summary}
+\newenvironment{proof}[1][Proof]{\textbf{#1.} }{\ \rule{0.5em}{0.5em}}
+
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Z}{\mathbb{Z}}
+
+\begin{document}
+
+\title{CS690S -AI Alignment - Fall 2026}
+\author{Sagnik Chatterjee}
+\date{\today}
+\maketitle
+
+
+\section{Part 1}
+
+\subsection{Statement}
+Run the following code again
+\begin{verbatim}
+python test_gym.py
+\end{verbatim}
+What do you notice happening? What specifically about MountainCar makes the
+problem difficult for RL?
+
+\subsection{Solution}
+	YOUR SOLUTION GOES HERE
+
+
+
+
+\section{Part 2}
+
+\subsection{Statement}
+You will now learn how to solve the MountainCar task by driving the car yourself.
+Run
+\begin{verbatim}
+python mountain_car_play.py
+\end{verbatim}
+Use the arrow keys to control the car by accelerating left and right. Note that
+if you run out of time you get a reward of $-200.0$ and the car will reset to the
+bottom of the hill. If you get to the flag in less than 200 steps you can get a
+higher score. Once you reach the flag the environment will restart at the bottom
+of the hill.
+
+Keep practicing until you can reliably get out of the valley. You can see your
+score for each episode output on the command line.
+Experiment with different strategies: e.g.
+\begin{enumerate}
+	\item Going right, then left, then right all the way up the hill
+	\item Going left, then right all the way up the hill.
+	\item Left, right, left, right up the hill.
+\end{enumerate}
+Which strategy do you like best? What is the best score you can get as a human
+demonstrator?
+
+\subsection{Solution}
+	YOUR SOLUTION GOES HERE
+
+
+
+
+\section{Part 3}
+
+\subsection{Statement}
+Now we will teach a simple behavioral cloning (BC) agent to drive itself out of
+the valley.
+
+First take a look at \texttt{mountain\_car\_bc.py} and try to get a basic
+understanding of what is happening. By default this code will collect a single
+demonstration, then parse the states and actions into tensors for easy input to a
+PyTorch neural network. It then trains a policy to imitate the demonstrations and
+evaluates the policy by testing it on different initial states. The command line
+will output the average, min, and max total rewards.
+
+Try it out by running
+\begin{verbatim}
+python mountain_car_bc.py
+\end{verbatim}
+Try to provide a good demonstration. Then watch what the agent has learned. Does
+it do a good job imitating? Does it ever get stuck? What is the average, min, and
+max?
+
+\subsection{Solution}
+	YOUR SOLUTION GOES HERE
+
+
+
+
+\section{Part 4}
+
+\subsection{Statement}
+Let's give more than one demonstration. Run the following to give 5 good
+demonstrations. If you mess up during one demo, feel free to restart until you
+give 5 good demos and try to keep to a consistent strategy.
+\begin{verbatim}
+python mountain_car_bc.py --num_demos 5
+\end{verbatim}
+Report the average min and max returns. Did it perform any better? Why or why
+not? Does the agent copy the strategy you used?
+
+\subsection{Solution}
+	YOUR SOLUTION GOES HERE
+
+
+
+
+\section{Part 5}
+
+\subsection{Statement}
+What do you think will happen if we give good and bad demonstrations?
+You will now give two demonstrations. For the first one, just press the right
+arrow key for the entire episode until it restarts. Then for the second demo,
+give a good demonstration that quickly gets out of the valley.
+\begin{verbatim}
+python mountain_car_bc.py --num_demos 2
+\end{verbatim}
+What does the policy learn? Why might bad demonstrations be a problem? Briefly
+suggest one potential idea for making BC robust to bad demonstrations, as long as
+they are a minority of demonstrations.
+
+\subsection{Solution}
+	YOUR SOLUTION GOES HERE
+
+
+
+
+\section{Part 6}
+
+\subsection{Statement}
+At a conceptual level, describe what changes you would need to make to the BC
+code to implement BCO(0), as described in the paper we read in class:
+\url{https://arxiv.org/pdf/1805.01954.pdf}. Answer this question before starting
+Part 7.
+
+\subsection{Solution}
+	YOUR SOLUTION GOES HERE
+
+
+
+
+\section{Part 7}
+
+\subsection{Statement}
+Implement and test BCO(0) by modifying the starter code in
+\texttt{mountain\_car\_bco.py}. This starter code is identical to the BC code,
+except: (1) the function \texttt{collect\_random\_interaction\_data} has been
+added to help with learning the inverse dynamics model; (2) a new argument for
+number of inverse dynamics training iterations has been added; and (3) some
+comments have been added about where to use the inverse dynamics model instead of
+ground-truth actions. You may need to experiment with different neural network
+sizes and training iterations to get the inverse dynamics model to work well.
+Report how well it works and what you tried to get it to work, including stats on
+the accuracy of prediction when tested on the demonstration data (training should
+be done with the random interaction data, not the demonstrations).
+
+\subsection{Solution}
+	YOUR SOLUTION GOES HERE
+
+
+
+
+\end{document}
