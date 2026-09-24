@@ -109,6 +109,38 @@ class PolicyNetwork(nn.Module):
         return x
 
 
+class InverseDynamicsNetwork(nn.Module):
+    """
+    features are standardized with statistics computed from the random interaction data.
+    an actions that changes the velocity by only +/-0.001 per step, so without normalization the signal that identifies the action is buried at a much smaller scale than positon.
+    """
+
+    def __init__(self, hidden_dim=64):
+        super().__init__()
+        self.fc1 = nn.Linear(4, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, 3)
+
+        # normalization statistics stored as buffers so they move with the model
+        self.register_buffer("feat_mean", torch.zeros(4))
+        self.register_buffer("feat_std", torch.ones(4))
+
+    @staticmethod
+    def make_features(obs, next_obs):
+        return torch.cat([obs, next_obs - obs], dim=1)
+
+    def set_normalization(self, feats):
+        self.feat_mean = feats.mean(dim=0)
+        self.feat_std = feats.std(dim=0) + 1e-8
+
+    def forward(self, obs, next_obs):
+        x = self.make_features(obs, next_obs)
+        x = (x - self.feat_mean) / self.feat_std
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return self.fc3(x)
+
+
 # evaluate learned policy
 def evaluate_policy(pi, num_evals, human_render=True):
     if human_render:
@@ -136,6 +168,25 @@ def evaluate_policy(pi, num_evals, human_render=True):
     print("average policy return", np.mean(policy_returns))
     print("min policy return", np.min(policy_returns))
     print("max policy return", np.max(policy_returns))
+
+
+def train_inverse_dynamics(inv_dyn, states, next_states, actions, num_iters, lr=1e-2):
+    # train the inverse dynamics model with the full-batch cross entropy on (s,s',a)
+    optimizer = Adam(inv_dyn.parameters(), lr=lr)
+    loss_criterion = nn.CrossEntropyLoss()
+
+    for i in range(num_iters):
+        optimizer.zero_grad()
+        logits = inv_dyn(states, next_states)
+        loss = loss_criterion(logits, actions)
+        loss.backward()
+        optimizer.step()
+        # batching
+        if i % 100 == 0 or i == num_iters - 1:
+            acc = (logits.argmax(dim=1) == actions).float().mean().item()
+            print(
+                f"inverse dynamics iteration {i} , loss {loss.item():.4f} train accuracy: {acc:.3f}"
+            )
 
 
 def inverse_dynamics(obs, next_obs, num_inv_dyn_iters):
