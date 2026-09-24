@@ -18,7 +18,11 @@ device = torch.device("cpu")
 
 
 # This will be useful for implementing BCO
-def collect_random_interaction_data(num_iters):
+def collect_random_interaction_data(num_iters, action_repeat=1):
+    # action_repeat > 1 holds each uniformly random action for that many steps.
+    # The actions are still random (no demo information is used), but holding them
+    # builds momentum so the car covers more of the track. action_repeat=1 is the
+    # original behavior.
     states = []
     next_states = []
     actions = []
@@ -28,8 +32,11 @@ def collect_random_interaction_data(num_iters):
     for i in range(num_iters):
         obs, _ = env.reset()
         done = False
+        t = 0
         while not done:
-            a = env.action_space.sample()
+            if t % action_repeat == 0:
+                a = env.action_space.sample()
+            t += 1
             next_obs, reward, terminated, truncated, info = env.step(a)
             done = terminated or truncated
             states.append(obs)
@@ -283,6 +290,7 @@ def inverse_dynamics(
     num_layers=2,
     normalize=True,
     lr=1e-2,
+    action_repeat=1,
 ):
     """
     BCO step
@@ -293,7 +301,9 @@ def inverse_dynamics(
          (obs, next_obs) with the most likely action.
     """
     # self supervised interaction data
-    data = to_tensors(*collect_random_interaction_data(num_random_episodes))
+    data = to_tensors(
+        *collect_random_interaction_data(num_random_episodes, action_repeat)
+    )
     print(f"collected {len(data[2])} random transitions for inverse dynamics")
 
     # train inverse dynamics model
@@ -364,7 +374,12 @@ if __name__ == "__main__":
         action="store_true",
         help="turn off input standardization of the inverse dynamics model",
     )
-    # bookkeeping
+    parser.add_argument(
+        "--action_repeat",
+        default=1,
+        type=int,
+        help="hold each random action for this many steps when collecting random data (1 = original)",
+    )  # bookkeeping
     parser.add_argument("--seed", default=0, type=int)
     parser.add_argument(
         "--tag",
@@ -425,21 +440,63 @@ if __name__ == "__main__":
         num_layers=args.num_layers,
         normalize=not args.no_normalize,
         lr=args.inv_dyn_lr,
+        action_repeat=args.action_repeat,
     )
-    # report only: ground truth actions are never used for training
-    acc = (estimated_acts == ground_truth_acts).float().mean().item()
+    # report only: ground truth actions are never used for training the inverse dynamics model
+    names = ["left", "noop", "right"]
+    correct = estimated_acts == ground_truth_acts
+    acc = correct.float().mean().item()
     print(f"Inverse dynamics accuracy on demo actions: {acc:.3f}")
     per_action = {}
-    for a, name in enumerate(["left", "noop", "right"]):
+    for a, name in enumerate(names):
         m = ground_truth_acts == a
         n = int(m.sum().item())
-        a_acc = (
-            (estimated_acts[m] == a).float().mean().item() if n > 0 else float("nan")
-        )
+        a_acc = correct[m].float().mean().item() if n > 0 else float("nan")
         per_action[f"demo_n_{name}"] = n
         per_action[f"demo_acc_{name}"] = a_acc
         if n > 0:
             print(f"  {name}: {n} steps, accuracy {a_acc:.3f}")
+
+    # confusion matrix: which action each true action was predicted as (printed only)
+    print(
+        "confusion (rows = true, cols = predicted):  "
+        + "  ".join(f"{n:>5s}" for n in names)
+    )
+    for a, name in enumerate(names):
+        counts = [
+            int(((ground_truth_acts == a) & (estimated_acts == p)).sum().item())
+            for p in range(3)
+        ]
+        print(f"  {name:>5s}" + " " * 36 + "  ".join(f"{c:5d}" for c in counts))
+
+    # where the demos went vs where the random training data went
+    demo_pos = obs[:, 0]
+    in_range = (demo_pos >= inv_stats["random_pos_min"]) & (
+        demo_pos <= inv_stats["random_pos_max"]
+    )
+    n_in, n_out = int(in_range.sum().item()), int((~in_range).sum().item())
+    coverage = {
+        "demo_pos_min": demo_pos.min().item(),
+        "demo_pos_max": demo_pos.max().item(),
+        "demo_n_in_range": n_in,
+        "demo_acc_in_range": correct[in_range].float().mean().item()
+        if n_in > 0
+        else float("nan"),
+        "demo_n_out_range": n_out,
+        "demo_acc_out_range": correct[~in_range].float().mean().item()
+        if n_out > 0
+        else float("nan"),
+    }
+    print(
+        f"demo positions [{coverage['demo_pos_min']:.2f}, {coverage['demo_pos_max']:.2f}], "
+        f"random data positions [{inv_stats['random_pos_min']:.2f}, {inv_stats['random_pos_max']:.2f}]"
+    )
+    print(
+        f"  inside random data range:  {n_in} steps, accuracy {coverage['demo_acc_in_range']:.3f}"
+    )
+    print(
+        f"  outside random data range: {n_out} steps, accuracy {coverage['demo_acc_out_range']:.3f}"
+    )
 
     # train policy WITHOUT ground truth actions
     pi = PolicyNetwork()
@@ -457,6 +514,7 @@ if __name__ == "__main__":
         "seed": args.seed,
         "num_demo_transitions": len(ground_truth_acts),
         "num_random_episodes": args.num_random_episodes,
+        "action_repeat": args.action_repeat,
         "hidden_dim": args.hidden_dim,
         "num_layers": args.num_layers,
         "normalize": not args.no_normalize,
@@ -466,6 +524,7 @@ if __name__ == "__main__":
         **inv_stats,
         "demo_acc": acc,
         **per_action,
+        **coverage,
         "bc_final_loss": bc_loss,
         "return_mean": float(np.mean(returns)),
         "return_min": float(np.min(returns)),
@@ -473,6 +532,14 @@ if __name__ == "__main__":
         "success_rate": float(np.mean(np.array(returns) > -200)),
     }
     new_file = not os.path.exists(args.results_file)
+    if not new_file:
+        with open(args.results_file, newline="") as f:
+            header = next(csv.reader(f), [])
+        if header != list(row.keys()):
+            raise SystemExit(
+                f"{args.results_file} was written by an older version with different columns; "
+                f"use a new --results_file name"
+            )
     with open(args.results_file, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(row.keys()))
         if new_file:
