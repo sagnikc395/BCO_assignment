@@ -52,9 +52,17 @@ training.
   - to backpropogate the error all we have to do is to do `loss.backward()`
   - need to clear the existing gradients though , else the gradients will be accumulated to exsiting gradients.
 
-- 
 
 ## Training a Classifier
+- when dealing with image, text , audio or video data, can use standard python packages that load data into a numpy array
+- can then convert into `torch.*Tensor`
+- for training a image classifier , simple flow:
+  - load and normalize the CIFAR10 training and test datasets using `torchvision`
+  - define a CNN
+  - define a loss function
+  - train the network on the training data
+  - test the network on the test data
 
+- 
 
 

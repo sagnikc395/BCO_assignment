@@ -16,6 +16,13 @@ conda activate imitation_learning
 pip install -r requirements.txt
 ```
 
+Commands for using with `uv`
+```
+  uv venv --python 3.9
+  source .venv/bin/activate
+  uv pip install -r requirements.txt
+```
+
 
 ### PyTorch Primer
 If you have never used PyTorch before, I'd recommend going through the 60-minute blitz tutorial: <https://pytorch.org/tutorials/beginner/deep_learning_60min_blitz.html>
