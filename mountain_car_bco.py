@@ -237,7 +237,7 @@ def label_demos(inv_dyn, obs, next_obs):
         return inv_dyn(obs, next_obs).argmax(dim=1)
 
 
-def inverse_dynamics(obs, next_obs, num_inv_dyn_iters, num_random_epsiodes=5):
+def inverse_dynamics(obs, next_obs, num_inv_dyn_iters, num_random_episodes=5):
     """
     BCO step
      1. Collect (s, a, s') tuples by interacting with the environment using a
@@ -247,14 +247,14 @@ def inverse_dynamics(obs, next_obs, num_inv_dyn_iters, num_random_epsiodes=5):
          (obs, next_obs) with the most likely action.
     """
     # self supervised interaction data
-    data = to_tensors(*collect_random_interaction_data(num_random_epsiodes))
+    data = to_tensors(*collect_random_interaction_data(num_random_episodes))
     print(f"collected {len(data[2])} random transitions for inverse dynamics")
 
     # train inverse dynamics model
     inv_dyn = fit_inverse_dynamics(*data, num_inv_dyn_iters)
 
     # infer actions for the demos
-    return label_demos(inv_dyn, obs, next_obs), data
+    return label_demos(inv_dyn, obs, next_obs)
 
 
 if __name__ == "__main__":
@@ -291,6 +291,8 @@ if __name__ == "__main__":
 
     # TODO: ADD CODE TO TRAIN INVERSE DYNAMICS MODEL AND ESTIMATE ACTIONS
     estimated_acts = inverse_dynamics(obs, next_obs, args.num_inv_dyn_iters)
+    acc = (estimated_acts == ground_truth_acts).float().mean().item()
+    print(f"Inverse dynamics accuracy on demo actions: {acc:.3f}")
 
     # train policy WITHOUT ground truth actions
     pi = PolicyNetwork()
