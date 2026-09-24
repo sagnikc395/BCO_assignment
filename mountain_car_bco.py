@@ -17,20 +17,22 @@ import torch.nn.functional as F
 device = torch.device("cpu")
 
 
-# This will be useful for implementing BCO
-def collect_random_interaction_data(num_iters, action_repeat=1):
+def collect_random_interaction_data(num_iters, action_repeat=1, seed=None):
     # action_repeat > 1 holds each uniformly random action for that many steps.
     # The actions are still random (no demo information is used), but holding them
     # builds momentum so the car covers more of the track. action_repeat=1 is the
     # original behavior.
+    # seed: the environment and its action space have their own random generators,
+    # which np.random.seed does not touch, so they are seeded here for reproducibility.
     states = []
     next_states = []
     actions = []
 
     env = gym.make("MountainCar-v0")
+    env.action_space.seed(seed)
 
     for i in range(num_iters):
-        obs, _ = env.reset()
+        obs, _ = env.reset(seed=None if seed is None else seed * 100000 + i)
         done = False
         t = 0
         while not done:
@@ -189,7 +191,7 @@ class InverseDynamicsNetwork(nn.Module):
 
 
 # evaluate learned policy
-def evaluate_policy(pi, num_evals, human_render=True):
+def evaluate_policy(pi, num_evals, human_render=True, eval_seed=None):
     if human_render:
         env = gym.make("MountainCar-v0", render_mode="human")
     else:
@@ -199,7 +201,7 @@ def evaluate_policy(pi, num_evals, human_render=True):
     for i in range(num_evals):
         done = False
         total_reward = 0
-        obs, _ = env.reset()
+        obs, _ = env.reset(seed=None if eval_seed is None else eval_seed + i)
         while not done:
             # take the action that the network assigns the highest logit value to
             # Note that first we convert from numpy to tensor and then we get the value of the
@@ -291,6 +293,7 @@ def inverse_dynamics(
     normalize=True,
     lr=1e-2,
     action_repeat=1,
+    seed=None,
 ):
     """
     BCO step
@@ -302,7 +305,7 @@ def inverse_dynamics(
     """
     # self supervised interaction data
     data = to_tensors(
-        *collect_random_interaction_data(num_random_episodes, action_repeat)
+        *collect_random_interaction_data(num_random_episodes, action_repeat, seed)
     )
     print(f"collected {len(data[2])} random transitions for inverse dynamics")
 
@@ -380,7 +383,19 @@ if __name__ == "__main__":
         type=int,
         help="hold each random action for this many steps when collecting random data (1 = original)",
     )  # bookkeeping
-    parser.add_argument("--seed", default=0, type=int)
+    parser.add_argument(
+        "--seed",
+        default=0,
+        type=int,
+        help="seeds torch, numpy, the random interaction data and the network init",
+    )
+    parser.add_argument(
+        "--eval_seed",
+        default=1000,
+        type=int,
+        help="evaluation episode i starts from env.reset(seed=eval_seed + i); "
+        "kept the same across runs so every configuration faces the same starts",
+    )
     parser.add_argument(
         "--tag",
         default="",
@@ -441,6 +456,7 @@ if __name__ == "__main__":
         normalize=not args.no_normalize,
         lr=args.inv_dyn_lr,
         action_repeat=args.action_repeat,
+        seed=args.seed,
     )
     # report only: ground truth actions are never used for training the inverse dynamics model
     names = ["left", "noop", "right"]
@@ -505,13 +521,17 @@ if __name__ == "__main__":
     )
 
     # evaluate learned policy
-    returns = evaluate_policy(pi, args.num_evals, human_render=not args.no_render)
+    returns = evaluate_policy(
+        pi, args.num_evals, human_render=not args.no_render, eval_seed=args.eval_seed
+    )
 
     # save config + results as one row
     row = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "tag": args.tag,
         "seed": args.seed,
+        "eval_seed": args.eval_seed,
+        "num_evals": args.num_evals,
         "num_demo_transitions": len(ground_truth_acts),
         "num_random_episodes": args.num_random_episodes,
         "action_repeat": args.action_repeat,
