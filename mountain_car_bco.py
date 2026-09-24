@@ -223,8 +223,38 @@ def to_tensors(states, next_states, actions):
     )
 
 
-def inverse_dynamics(obs, next_obs, num_inv_dyn_iters):
-    pass
+def fit_inverse_dynamics(states, next_states, actions, num_iters):
+    # build an invdynamicsnetwork, normalize on this data and train it
+    inv_dyn = InverseDynamicsNetwork().to(device)
+    inv_dyn.set_normalization(InverseDynamicsNetwork.make_features(states, next_states))
+    train_inverse_dynamics(inv_dyn, states, next_states, actions, num_iters)
+    return inv_dyn
+
+
+def label_demos(inv_dyn, obs, next_obs):
+    # most likely action for each action-free demo transition
+    with torch.no_grad():
+        return inv_dyn(obs, next_obs).argmax(dim=1)
+
+
+def inverse_dynamics(obs, next_obs, num_inv_dyn_iters, num_random_epsiodes=5):
+    """
+    BCO step
+     1. Collect (s, a, s') tuples by interacting with the environment using a
+         random policy. Here the actions ARE known because we chose them.
+      2. Train an inverse dynamics model p(a | s, s') on that data.
+      3. Use the model to label the action-free demonstration transitions
+         (obs, next_obs) with the most likely action.
+    """
+    # self supervised interaction data
+    data = to_tensors(*collect_random_interaction_data(num_random_epsiodes))
+    print(f"collected {len(data[2])} random transitions for inverse dynamics")
+
+    # train inverse dynamics model
+    inv_dyn = fit_inverse_dynamics(*data, num_inv_dyn_iters)
+
+    # infer actions for the demos
+    return label_demos(inv_dyn, obs, next_obs), data
 
 
 if __name__ == "__main__":
