@@ -123,6 +123,19 @@ Each run appends one row of config plus metrics to `results_p7.csv`. The script
 refuses to start if that file already exists, so rename or delete it before
 re-running rather than mixing rows from different sweeps.
 
+`run_p7_coverage.sh` is the second sweep. It holds the inverse dynamics model at
+the baseline (64 units, 2 hidden layers, 1000 iterations) and varies the *coverage*
+of the random interaction data instead: more uniformly random episodes
+(`--num_random_episodes`), holding each random action for k steps at the same data
+budget (`--action_repeat`), and an ablation of input standardization
+(`--no_normalize`). It requires `demos.pkl` to already exist so that both sweeps are
+scored on the same demonstration transitions, and writes `results_p7_coverage.csv`.
+
+```shell
+chmod +x ./run_p7_coverage.sh
+./run_p7_coverage.sh
+```
+
 A single configuration can also be run directly, for example:
 
 ```shell

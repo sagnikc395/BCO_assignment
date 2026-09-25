@@ -12,6 +12,7 @@
 \usepackage{hyperref}
 \usepackage{booktabs}
 \usepackage{array}
+\usepackage[section]{placeins}
 \setcounter{MaxMatrixCols}{30}
 \newtheorem{theorem}{Theorem}
 \newtheorem{acknowledgement}[theorem]{Acknowledgement}
@@ -43,7 +44,7 @@
 
 \begin{document}
 
-\title{CS690S -AI Alignment - Fall 2026}
+\title{CS690S - AI Alignment - Fall 2026}
 \author{Sagnik Chatterjee}
 \date{\today}
 \maketitle
@@ -123,7 +124,7 @@ first few steps; strategy 3 (left, right, left, right) is the hardest to time: i
 switches are not in phase with the car's natural oscillation, the pumping cancels out and
 the episode times out at $-200$.
 
-Over roughly 19 practice episodes my returns ranged from $-200.0$ (timeouts, early on)
+Over 18 scored practice episodes my returns ranged from $-200.0$ (timeouts, early on)
 to a best score of $\mathbf{-87.0}$, with typical good demonstrations landing in the
 $-140$ to $-160$ range. The $-87.0$ episode used the ``left then right'' strategy with a
 single well-timed switch at the leftmost point of the swing. Table~\ref{tab:p2} lists
@@ -336,14 +337,17 @@ BC loss & $0.9332$ & $0.5553$ & $0.4392$ & $0.3991$ & $0.3858$ & $0.3751$ & $0.3
 The training loss is not what fails here. It drops quickly from $0.93$ to about $0.40$
 within 30 iterations and then flattens into a slow decline to $0.33$, i.e.\ the network
 fits the mixed dataset about as well as it fit the single clean demonstration in Part 3
-($0.29$), yet the resulting policy is strictly worse than either demonstrator. The
-residual floor around $0.33$--$0.40$ is \emph{irreducible label noise}: the two
+($0.29$), yet the resulting policy is strictly worse than either demonstrator. Most of the
+loss that remains once it levels off (around $0.33$--$0.40$) is \emph{irreducible label
+noise}: the two
 demonstrations visit overlapping states but label them with different actions, so no
 deterministic policy can fit both. Cross-entropy responds by predicting something close to
 the state-conditional average of the two behaviors, and because the argmax of that average
 is dominated by the ``push right'' action (it is the only action in the bad demo and also
 appears throughout the second half of the good one), the policy just pushes right and never
-builds momentum. Averaging two valid-but-different behaviors gives behavior that is worse
+builds momentum. The bad demonstration also carries more weight than its count suggests: a
+failed episode always lasts the full $200$ steps while a successful one ends early, so it
+contributes $200$ of the $316$ training transitions ($63\%$). Averaging two valid-but-different behaviors gives behavior that is worse
 than either --- and low BC loss is no indicator of it, since the loss is measured on the
 demonstrator's own states, not on the states the learned policy actually reaches.
 
@@ -447,15 +451,31 @@ scored on \emph{the same} $734$ demonstration transitions (5 demos: $196$ accele
 $110$ no-op, $428$ accelerate-right), and each run appends a row of config $+$ metrics to a
 CSV. \texttt{run\_p7.sh} sweeps network size and inverse dynamics training iterations with
 $5$ seeds per configuration and $20$ evaluation episodes per run
-(\texttt{results\_p7.csv}); a second sweep over the amount and coverage of the random
-interaction data is in \texttt{results\_p7\_coverage.csv}. Every number below is a mean
+(\texttt{results\_p7.csv}); \texttt{run\_p7\_coverage.sh} is a second sweep, over the amount and
+coverage of the random interaction data, written to
+\texttt{results\_p7\_coverage.csv}. Every number below is a mean
 over the $5$ seeds.
+
+\begin{sloppypar}
+\noindent The only change to the provided \texttt{collect\_random\_interaction\_data} is an
+optional \texttt{action\_repeat} argument (the default of $1$ reproduces the original):
+every action is still drawn uniformly at random, and no demonstration information is used.
+Runs use seeds $0$--$4$ (\texttt{-{}-seed}), which control PyTorch, NumPy and the
+environment's resets and action sampling; evaluation episode $i$ starts from
+\texttt{env.reset(seed=1000+i)}, so every configuration is scored on the same $20$ start
+states. The exact commands are in \texttt{run\_p7.sh} in the repository.
+\end{sloppypar}
 
 \medskip
 \noindent\textbf{Accuracy on the demonstration data.} Training accuracy on the random
 interaction data is $1.000$ in every configuration except the smallest network, so it is not
 a useful diagnostic; the informative number is accuracy on the demonstration transitions,
-which the model never trains on. In the baseline configuration ($64$ units, $2$ hidden
+which the model never trains on. A training accuracy of $1.000$ is expected: MountainCar's
+dynamics are deterministic, $v_{t+1} = v_t + 0.001\,(a_t - 1) - 0.0025\cos(3p_t)$ (before
+clipping), so $(v_{t+1} - v_t + 0.0025\cos(3p_t))/0.001 = a_t - 1$ identifies the action
+exactly from $(s_t, s_{t+1})$. The only exceptions are collisions with the left wall at
+$p=-1.2$, where the velocity is reset to $0$, and (rarely) steps where the velocity hits its
+$\pm 0.07$ limit. In the baseline configuration ($64$ units, $2$ hidden
 layers, $1000$ iterations, $5$ random episodes $=1000$ transitions) demonstration accuracy
 is only $0.771$, and the resulting policy reaches the flag in $36\%$ of evaluation episodes
 at an average return of $-185.2$.
@@ -559,19 +579,21 @@ outside network size and iteration count mattered far more than either of them.
         the random interaction data. Normalization is what makes the coverage fix pay off:
         at action repeat $8$, turning it off drops demonstration accuracy from $0.924$ to
         $0.824$ and accuracy on out-of-range states from $0.647$ to $0.305$. At the
-        baseline's tiny coverage it makes no positive difference ($0.771$ normalized versus
-        $0.818$ unnormalized), which is consistent with the same story: when nearly no
-        expert state is in distribution, how the inputs are scaled hardly matters.
+        baseline's limited coverage, normalization actually hurt slightly ($0.771$
+        normalized versus $0.818$ unnormalized), even though $331$ of the $734$
+        demonstration states ($45\%$) lie inside the covered range. So its benefit is
+        specific to the extended-coverage setting; with $5$ seeds, part of the baseline
+        reversal may be seed variation.
 \end{enumerate}
 
 \begin{table}[h]
 \centering
-\small
+\footnotesize
 \caption{Coverage of the random interaction data (width $64$, $2$ layers, $1000$ inverse
 dynamics iterations). Action repeat $k$ holds each random action for $k$ steps; the demo
 states span $[-1.19, 0.50]$ for comparison.}
 \label{tab:p7cov}
-\setlength{\tabcolsep}{5pt}
+\setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}lrccccc@{}}
 \toprule
 \textbf{random data} & \textbf{\#trans.} & \textbf{pos.\ range} & \textbf{demo acc.} &
@@ -597,9 +619,13 @@ and an average return of $-185.2$. With the coverage fix the method works well: 
 labelling accuracy $0.924$, $20/20$ successful evaluation episodes for every seed, average
 return $-140.5$, and the single best run in the whole sweep (action repeat $2$, seed $0$)
 averaged $-120.9$ over its $20$ evaluation episodes with $100\%$ success and a best episode
-of $-90$; the best individual episode anywhere in the sweep was $-86$. That compares favorably with BC trained on the
-\emph{true} actions in Part 4 ($-145.8$), which is the natural reference point for BCO(0)
-here, and with my own demonstrations (best $-87$). Variance across seeds is large throughout
+of $-90$; the best individual episode anywhere in the sweep was $-86$. These best-case
+numbers were selected after the fact, so they are upper bounds rather than expected results.
+For reference, BC trained on the \emph{true} actions in Part 4 averaged $-145.8$ and my own
+best demonstration scored $-87$, but the Part 4 number is not directly comparable: it used a
+different set of demonstrations and $6$ unseeded evaluation episodes, whereas the numbers
+here are $5$-seed means over $20$ fixed episodes on the $734$-transition demonstration set.
+Variance across seeds is large throughout
 (the same configuration can go from $0\%$ to $100\%$ success), which is why every number
 reported here is a $5$-seed mean rather than a single run.
 
@@ -609,8 +635,4 @@ weakly (and non-monotonically) by the size of the inverse dynamics network or ho
 trains. This is consistent with the paper's motivation for the post-demonstration iterations
 of BCO($\alpha$), which address exactly this mismatch by adding on-policy transitions from
 the states the learner actually reaches.
-
-
-
-
 \end{document}
