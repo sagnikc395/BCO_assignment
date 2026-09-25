@@ -345,11 +345,14 @@ deterministic policy can fit both. Cross-entropy responds by predicting somethin
 the state-conditional average of the two behaviors, and because the argmax of that average
 is dominated by the ``push right'' action (it is the only action in the bad demo and also
 appears throughout the second half of the good one), the policy just pushes right and never
-builds momentum. The bad demonstration also carries more weight than its count suggests: a
-failed episode always lasts the full $200$ steps while a successful one ends early, so it
-contributes $200$ of the $316$ training transitions ($63\%$). Averaging two valid-but-different behaviors gives behavior that is worse
-than either --- and low BC loss is no indicator of it, since the loss is measured on the
-demonstrator's own states, not on the states the learned policy actually reaches.
+builds momentum.
+
+The bad demonstration also carries more weight than its count suggests: a failed episode
+always lasts the full $200$ steps while a successful one ends early, so it contributes $200$
+of the $316$ training transitions ($63\%$). Averaging two valid-but-different behaviors gives
+behavior that is worse than either, and the low BC loss does not reveal this, since the loss
+is measured on the demonstrator's own states, not on the states the learned policy actually
+reaches.
 
 \medskip
 \noindent\textbf{Why bad demonstrations are a problem.} BC is pure supervised learning on
@@ -531,7 +534,7 @@ trend is not monotone: demonstration accuracy falls steadily from $0.849$ at wid
 the best configuration in the whole size sweep, at $86\%$ success --- down to $0.771$ at the
 $64$-unit baseline, and then recovers slightly to $0.790$ and $0.805$ at widths $128$ and
 $256$. So ``smaller is better'' holds only over the range width $4$ to width $64$; the
-sweep as a whole is U-shaped, and the honest summary is that nothing in it beats width $4$.
+sweep as a whole is U-shaped, and nothing in it beats width $4$.
 Depth is actively bad: a single hidden layer beats the $2$-layer baseline, while $3$ and $4$
 layers collapse to $0.02$ and $0.00$ success. Note that this is not a matter of one model
 fitting the random interaction data better than another: every configuration from width $4$
