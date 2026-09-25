@@ -127,8 +127,8 @@ class PolicyNetwork(nn.Module):
 
 class InverseDynamicsNetwork(nn.Module):
     """
-    features are standardized with statistics computed from the random interaction data.
-    an actions that changes the velocity by only +/-0.001 per step, so without normalization the signal that identifies the action is buried at a much smaller scale than positon.
+    Inverse dynamics model: maps (s_t, s_{t+1}) to a distribution over the three
+    actions.
     """
 
     def __init__(self, hidden_dim=64, num_layers=2, normalize=True):
@@ -179,8 +179,6 @@ def evaluate_policy(pi, num_evals, human_render=True, eval_seed=None):
         obs, _ = env.reset(seed=None if eval_seed is None else eval_seed + i)
         while not done:
             # take the action that the network assigns the highest logit value to
-            # Note that first we convert from numpy to tensor and then we get the value of the
-            # argmax using .item() and feed that into the environment
             action = torch.argmax(pi(torch.from_numpy(obs).unsqueeze(0))).item()
             # print(action)
             obs, rew, terminated, truncated, info = env.step(action)
@@ -207,7 +205,6 @@ def train_inverse_dynamics(inv_dyn, states, next_states, actions, num_iters, lr=
         loss = loss_criterion(logits, actions)
         loss.backward()
         optimizer.step()
-        # batching
         if i % 100 == 0 or i == num_iters - 1:
             acc = (logits.argmax(dim=1) == actions).float().mean().item()
             print(
