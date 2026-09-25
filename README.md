@@ -16,6 +16,7 @@ conda activate imitation_learning
 pip install -r requirements.txt
 ```
 
+## Setup with uv 
 Commands for using with `uv`
 ```
   uv venv --python 3.9
@@ -97,6 +98,36 @@ At a conceptual level, describe what changes you would need to make to the BC co
 
 ## Part 7
 Implement and test BCO(0) by modifying the starter code in `mountain_car_bco.py`. This starter code is identical to the BC code, except: (1) the function collect_random_interaction_data has been added to help with learning the inverse dynamics model; (2) a new argument for number of inverse dynamics training iterations has been added; and (3) some comments have been added about where to use the inverse dynamics model instead of ground-truth actions.  You may need to experiment with different neural network sizes and training iterations to get the inverse dynamics model to work well. Report how well it works and what you tried to get it to work, including stats on the accuracy of prediction when tested on the demonstration data (training should be done with the random interaction data, not the demonstrations).
+
+### Running the Experiment
+
+`run_p7.sh` sweeps the two axes Part 7 asks about, network size (width and depth)
+and number of inverse dynamics training iterations, over seeds 0-4 with 20
+evaluation episodes per run, and records the inverse dynamics model's accuracy on
+the demonstration data.
+
+```shell
+chmod +x ./run_p7.sh
+./run_p7.sh
+```
+
+The script uses `uv run mountain_car_bco.py`, so activate the environment from the
+setup section above first.
+
+On the first run it opens a play window and asks for the demonstrations, caching
+them in `demos.pkl`; later runs reuse that file so every configuration is scored on
+the same demonstration transitions. Delete `demos.pkl` to record new
+demonstrations.
+
+Each run appends one row of config plus metrics to `results_p7.csv`. The script
+refuses to start if that file already exists, so rename or delete it before
+re-running rather than mixing rows from different sweeps.
+
+A single configuration can also be run directly, for example:
+
+```shell
+uv run mountain_car_bco.py --hidden_dim 128 --num_inv_dyn_iters 500 --num_evals 20
+```
 
 ## Submission
 Prepare a PDF report with your answers to the questions (preferably typeset in LaTeX) and submit the PDF and code separately on Gradescope under the respective submissions.

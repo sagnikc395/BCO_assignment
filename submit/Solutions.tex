@@ -48,6 +48,10 @@
 \date{\today}
 \maketitle
 
+\begin{center}
+Code: \url{https://github.com/sagnikc395/BCO_assignment}
+\end{center}
+
 
 \section{Part 1}
 
@@ -60,16 +64,16 @@ What do you notice happening? What specifically about MountainCar makes the
 problem difficult for RL?
 
 \subsection{Solution}
-The random policy jitters the car back and forth near the bottom of the
-valley and essentially never leaves it: every one of the 200 steps returns $-1$ and the
-episode ends with a return of $-200.0$, with the car still in the basin.
+The random policy jitters the car back and forth near the bottom of the valley and never
+leaves it: every one of the 200 steps returns $-1$ and the episode ends with a return of
+$-200.0$, with the car still in the basin.
 
 MountainCar is hard for RL because the reward signal carries no information about
 progress. The engine is weaker than gravity, so the only way to reach the flag is to
 first drive \emph{away} from it and pump energy into the system over many steps
 (a long, precisely correlated sequence of actions). A uniformly random policy has
 essentially zero probability of producing such a sequence within 200 steps, so the
-agent almost never sees a non $-200$ return. This means:
+agent almost never sees a return other than $-200$. Three consequences follow:
 \begin{itemize}
   \item \textbf{Exploration / sparse-in-practice reward:} all trajectories look equally
         bad ($-200$), so the reward gives no gradient toward the goal. The agent is
@@ -172,11 +176,11 @@ The demonstration I gave had return $-151.0$. BC training drove the
 cross-entropy loss down smoothly from $1.07$ to $0.29$ over 100 full-batch iterations, so
 the policy does fit the demonstration data well.
 
-Behaviorally the imitation is only partly successful. The learned policy reproduces the
-general left-then-right pumping motion, but it is brittle: from initial states that differ
-from the one state the demonstration started in, it drifts off the demonstrated trajectory
-and then does not know what to do, and in 2 of 6 evaluation episodes it got stuck
-oscillating in the valley and timed out. Table~\ref{tab:p3loss} shows the training loss
+The imitation is only partly successful. The learned policy reproduces the left-then-right
+pumping motion, but it is brittle: from initial states that differ from the one the
+demonstration started in, it drifts off the demonstrated trajectory and then has nothing to
+fall back on, and in 2 of 6 evaluation episodes it got stuck oscillating in the valley and
+timed out. Table~\ref{tab:p3loss} shows the training loss
 and Table~\ref{tab:p3eval} the per-episode evaluation returns.
 
 \begin{table}[h]
@@ -207,7 +211,7 @@ return & $-200$ & $-184$ & $-200$ & $-149$ & $-146$ & $-186$ \\
 \end{table}
 
 So its best episodes are about as good as my demonstration ($-146$ vs.\ $-151$), but it
-fails outright a third of the time. This is the classic \emph{compounding error /
+fails outright a third of the time. This is the \emph{compounding error /
 covariate shift} problem of BC: a single demonstration covers a very narrow slice of the
 state space, and once a small prediction error pushes the car into a state that never
 appeared in the data, the policy's predictions there are essentially unconstrained.
@@ -229,7 +233,7 @@ not? Does the agent copy the strategy you used?
 
 \subsection{Solution}
 With 5 demonstrations (returns $-192, -160, -169, -162, -92$) the learned
-policy is clearly better and, importantly, much more \emph{consistent}.
+policy is better and much more \emph{consistent}.
 
 \begin{table}[h]
 \centering
@@ -309,8 +313,8 @@ they are a minority of demonstrations.
 
 \subsection{Solution}
 I expected the bad demonstration to pull the policy toward always
-accelerating right, and that is essentially what happened, but the failure was even more
-complete than that. With one all-right demonstration ($-200.0$) and one good demonstration
+accelerating right. That is what happened, and it was enough to break the policy
+entirely. With one all-right demonstration ($-200.0$) and one good demonstration
 ($-200.0$ as recorded for that episode), the learned policy never escapes the valley.
 All six evaluation episodes returned $-200.0$, so the average, minimum and maximum
 returns are all $-200.0$.
@@ -398,7 +402,7 @@ code, and one full pass through them ($\alpha = 0$ means no post-demonstration i
         evaluate as before.
 \end{enumerate}
 
-So the policy network, the BC loss, and the evaluation loop stay exactly the same; what is
+The policy network, the BC loss, and the evaluation loop stay exactly the same; what is
 added is a second network plus its own data-collection and training stage, and the action
 labels become \emph{predicted} rather than ground truth. The key practical risk is a
 distribution mismatch: the inverse dynamics model is trained on states a random policy
@@ -429,102 +433,171 @@ be done with the random interaction data, not the demonstrations).
 \end{sloppypar}
 
 \subsection{Solution}
-\textbf{Implementation.} I implemented BCO(0) in
-\texttt{mountain\_car\_bco.py} exactly along the three stages above: an
-\texttt{InverseDynamicsNetwork} (input $(s_t, s_{t+1})$, 3-way output) trained with
-full-batch Adam and cross-entropy on random interaction data, then used to relabel the
-demonstration transitions, which are then fed to the unchanged BC routine. The
-demonstrations are cached in \texttt{demos.pkl} so that every configuration is compared on
-\emph{the same} 249 demonstration transitions (5 demos), and each run appends a row of
-config $+$ metrics to a CSV. I ran a sweep of 96 runs (\texttt{run\_p7.sh},
-\texttt{results\_p7.csv}) over hidden width, depth, learning rate, number of inverse
-dynamics iterations, number of BC iterations, amount of random data, input normalization,
-and action repeat, with 3 seeds per configuration.
+\textbf{Implementation.} I implemented BCO(0) in \texttt{mountain\_car\_bco.py} along the
+three stages above: an \texttt{InverseDynamicsNetwork} (input $(s_t,\; s_{t+1} - s_t)$,
+3-way output) trained with full-batch Adam and cross-entropy on random interaction data
+only, then used to relabel the demonstration transitions, which are fed to the unchanged BC
+routine. The demonstrations are cached in \texttt{demos.pkl} so that every configuration is
+scored on \emph{the same} $734$ demonstration transitions (5 demos: $196$ accelerate-left,
+$110$ no-op, $428$ accelerate-right), and each run appends a row of config $+$ metrics to a
+CSV. \texttt{run\_p7.sh} sweeps network size and inverse dynamics training iterations with
+$5$ seeds per configuration and $20$ evaluation episodes per run
+(\texttt{results\_p7.csv}); a second sweep over the amount and coverage of the random
+interaction data is in \texttt{results\_p7\_coverage.csv}. Every number below is a mean
+over the $5$ seeds.
 
 \medskip
-\noindent\textbf{What I had to do to make the inverse dynamics model work.} Two changes
-mattered far more than network size:
-
-\begin{enumerate}
-  \item \textbf{Input representation / normalization.} The raw features are on wildly
-        different scales: position lives in $[-1.2, 0.6]$, while a single action changes
-        velocity by only $\pm 0.001$. I therefore feed
-        $(s_t,\; s_{t+1} - s_t)$ (position/velocity plus the \emph{delta}) and standardize
-        all 4 features using statistics computed from the random interaction data. Without
-        this the action-identifying signal is numerically buried and training is much
-        slower and less reliable.
-  \item \textbf{State coverage of the random data (the real bottleneck).} A uniformly
-        random policy hardly leaves the bottom of the valley, so the model is trained on
-        positions in roughly $[-0.73, -0.31]$ but applied to demonstration states spanning
-        $[-0.94, 0.50]$. Adding an \texttt{--action\_repeat} option, holding each
-        (still uniformly random) action for $k$ steps so the car builds momentum and
-        covers far more of the track, extends the random-data range to roughly
-        $[-1.2, 0.48]$ and essentially eliminates the mismatch.
-\end{enumerate}
-
-\medskip
-\noindent\textbf{Accuracy results.} Training accuracy on the random interaction data is
-almost always $1.000$, so it is not a useful diagnostic; the informative number is
-accuracy on the (held-out) demonstration transitions. Means over 3 seeds:
+\noindent\textbf{Accuracy on the demonstration data.} Training accuracy on the random
+interaction data is $1.000$ in every configuration except the smallest network, so it is not
+a useful diagnostic; the informative number is accuracy on the demonstration transitions,
+which the model never trains on. In the baseline configuration ($64$ units, $2$ hidden
+layers, $1000$ iterations, $5$ random episodes $=1000$ transitions) demonstration accuracy
+is only $0.771$, and the resulting policy reaches the flag in $36\%$ of evaluation episodes
+at an average return of $-185.2$.
 
 \begin{table}[h]
 \centering
 \small
-\caption{Inverse dynamics accuracy on the 249 demonstration transitions and resulting
-policy performance, averaged over 3 seeds per configuration.}
-\label{tab:p7}
-\setlength{\tabcolsep}{5pt}
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.4cm}ccc@{}}
+\caption{Network size: inverse dynamics accuracy on the $734$ demonstration transitions,
+average return and success rate of the resulting policy. Width varies at $2$ hidden layers;
+depth varies at $64$ units per layer. Baseline: width $64$, $2$ layers.}
+\label{tab:p7size}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{@{}lccc@{}}
 \toprule
 \textbf{configuration} & \textbf{demo acc.} & \textbf{avg.\ return} & \textbf{success rate} \\
 \midrule
-baseline (hidden 64, 2 layers, 5 random episodes, repeat 1) & $0.869$ & $-184.7$ & $0.39$ \\
-more random data (50 to 200 episodes, repeat 1) & $0.974$ & $-180.6$ & $0.41$ \\
-action repeat $2$ to $16$ (5 random episodes) & $0.995$ & $-175.4$ & $0.48$ \\
-action repeat $8$ with 50 random episodes & $\mathbf{0.997}$ & $\mathbf{-166.2}$ & $\mathbf{0.67}$ \\
+width $2$   & $0.529$ & $-185.8$ & $0.31$ \\
+width $4$   & $\mathbf{0.849}$ & $\mathbf{-163.3}$ & $\mathbf{0.86}$ \\
+width $8$   & $0.830$ & $-165.7$ & $0.70$ \\
+width $16$  & $0.806$ & $-176.6$ & $0.51$ \\
+width $32$  & $0.784$ & $-187.2$ & $0.19$ \\
+width $64$ (baseline) & $0.771$ & $-185.2$ & $0.36$ \\
+width $128$ & $0.790$ & $-175.5$ & $0.49$ \\
+width $256$ & $0.805$ & $-166.8$ & $0.55$ \\
+\midrule
+$1$ layer  & $0.837$ & $-166.8$ & $0.68$ \\
+$3$ layers & $0.712$ & $-199.5$ & $0.02$ \\
+$4$ layers & $0.649$ & $-200.0$ & $0.00$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The best individual runs reached $100\%$ demonstration-labelling accuracy and returns of
-$-147$ to $-150$ (with up to $6/6$ successful evaluation episodes and a best single episode
-of $-122$), i.e.\ roughly comparable to the BC-with-true-actions result of Part 4
-($-145.8$), which is the natural upper bound for BCO(0) here.
+\begin{table}[h]
+\centering
+\small
+\caption{Inverse dynamics training iterations (width $64$, $2$ layers): accuracy on the
+$734$ demonstration transitions and average return.}
+\label{tab:p7iters}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}l*{8}{r}@{}}
+\toprule
+inverse dynamics iterations & 10 & 25 & 50 & 100 & 250 & 500 & 1000 & 3000 \\
+\midrule
+demo accuracy & $0.612$ & $0.714$ & $0.752$ & $0.760$ & $0.768$ & $0.771$ & $0.771$ & $0.785$ \\
+avg.\ return & $-200.0$ & $-187.0$ & $-179.3$ & $-182.3$ & $-182.3$ & $-186.3$ & $-185.2$ & $-187.2$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Extra capacity was useless or harmful. Only width $2$ genuinely underfits, and it is the
+only configuration whose \emph{training} accuracy fails as well ($0.674$); above that,
+\emph{smaller is better}: width $4$ is the best configuration in the whole size sweep
+($0.849$ demonstration accuracy, $86\%$ success), and widths $32$--$256$ are all at or below
+the $64$-unit baseline. Depth is actively bad: a single hidden layer beats the $2$-layer
+baseline, while $3$ and $4$ layers collapse to $0.02$ and $0.00$ success. This suggests that
+a bigger inverse dynamics model fits the random interaction data more tightly and therefore
+extrapolates worse to the expert's states, which is exactly where it has to work. Training
+longer helps only marginally and saturates after roughly $50$ iterations: going from $50$ to
+$3000$ iterations moves demonstration accuracy from $0.752$ to $0.785$ and does not improve
+return at all, so iterations alone do not close the gap.
 
 \medskip
 \noindent\textbf{Where the errors are.} Breaking the baseline's demonstration accuracy down
-confirms the coverage diagnosis:
+shows what the missing $23\%$ is:
 \begin{itemize}
-  \item \emph{By action:} accelerate-left and no-op are predicted at $100\%$, while
-        accelerate-right drops to $\approx 0.82$, because the random policy rarely produces the
-        sustained rightward motion the expert uses to climb.
-  \item \emph{By state region:} on demonstration states \emph{inside} the position range
-        covered by the random data, accuracy is $1.00$; on states \emph{outside} it,
-        accuracy falls to $\approx 0.79$. With action repeat, almost all demonstration
-        states fall inside the covered range and accuracy goes to $1.00$ in both buckets.
+  \item \emph{By action:} no-op is predicted at $0.933$, accelerate-left at $0.755$, and
+        accelerate-right --- the most common expert action ($428$ of $734$ transitions) ---
+        at only $0.736$, because the random policy rarely produces the sustained rightward
+        motion the expert uses to climb.
+  \item \emph{By state region:} a uniformly random policy hardly leaves the bottom of the
+        valley, so the baseline model is trained on positions in roughly $[-0.74, -0.32]$
+        but applied to demonstration states spanning $[-1.19, 0.50]$, leaving about $403$ of
+        the $734$ demonstration transitions outside the covered position range. On
+        demonstration states \emph{inside} the covered range accuracy is $0.935$; on those
+        outside it, it falls to $0.637$.
 \end{itemize}
 
 \medskip
-\noindent\textbf{Things that did \emph{not} help.} Width and depth were largely irrelevant
-once normalization was in place. Hidden width $4$ already gives $\approx 0.98$
-demonstration accuracy, and width $64$ with 3 or 4 layers is no better (mean returns
-$-189.5$ for the width sweep, $-192.3$ for the depth sweep). Training the inverse dynamics
-model \emph{longer} was mildly harmful (\texttt{iters} sweep: mean demo accuracy $0.789$,
-mean return $-195.0$): it overfits the narrow random-data distribution and generalizes
-worse to expert states. Likewise, more BC iterations ($500$/$1000$ instead of $100$) hurt
-(mean return $-193.8$), since the policy then fits the noisy \emph{predicted} labels too
-tightly. Variance across seeds is large throughout, since the same configuration can go from
-$0\%$ to $100\%$ success, so all conclusions above are drawn from the multi-seed means
-rather than single runs.
+\noindent\textbf{What I had to do to make the inverse dynamics model work.} Two things
+outside network size and iteration count mattered far more than either of them.
+
+\begin{enumerate}
+  \item \textbf{State coverage of the random data.} Holding each (still uniformly random)
+        action for $k$ steps lets the car build momentum and extends the random data's
+        position range dramatically at the \emph{same} budget of $1000$ transitions. With
+        $k=8$ the range grows to $[-1.11, 0.11]$, out-of-range demonstration transitions
+        drop from $403$ to $130$, demonstration accuracy rises to $0.924$, and the policy
+        reaches the flag in $100\%$ of evaluation episodes at an average return of $-140.5$.
+        Simply collecting more uniformly random episodes is far less efficient: $200$
+        episodes ($40{,}000$ transitions, $40\times$ the data) reach $0.849$ accuracy, which
+        action repeat $8$ beats with $1000$.
+  \item \textbf{Input representation / normalization.} The raw features are on very
+        different scales: position lives in $[-1.2, 0.6]$, while a single action changes
+        velocity by only $\pm 0.001$. I feed $(s_t,\; s_{t+1} - s_t)$, i.e.\ the state plus
+        the \emph{delta}, and standardize all $4$ features using statistics computed from
+        the random interaction data. Normalization is what makes the coverage fix pay off:
+        at action repeat $8$, turning it off drops demonstration accuracy from $0.924$ to
+        $0.824$ and accuracy on out-of-range states from $0.647$ to $0.305$. At the
+        baseline's tiny coverage it makes no positive difference ($0.771$ normalized versus
+        $0.818$ unnormalized), which is consistent with the same story: when nearly no
+        expert state is in distribution, how the inputs are scaled hardly matters.
+\end{enumerate}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Coverage of the random interaction data (width $64$, $2$ layers, $1000$ inverse
+dynamics iterations). Action repeat $k$ holds each random action for $k$ steps; the demo
+states span $[-1.19, 0.50]$ for comparison.}
+\label{tab:p7cov}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lrccccc@{}}
+\toprule
+\textbf{random data} & \textbf{\#trans.} & \textbf{pos.\ range} & \textbf{demo acc.} &
+\textbf{\#out of range} & \textbf{avg.\ return} & \textbf{success} \\
+\midrule
+$5$ episodes (baseline) & $1000$ & $[-0.74, -0.32]$ & $0.771$ & $403$ & $-185.2$ & $0.36$ \\
+$20$ episodes & $4000$ & $[-0.80, -0.26]$ & $0.837$ & $342$ & $-149.5$ & $0.97$ \\
+$50$ episodes & $10000$ & $[-0.82, -0.25]$ & $0.834$ & $329$ & $-167.7$ & $0.74$ \\
+$200$ episodes & $40000$ & $[-0.86, -0.18]$ & $0.849$ & $287$ & $-156.5$ & $0.89$ \\
+\midrule
+action repeat $2$ & $1000$ & $[-0.88, -0.18]$ & $0.868$ & $283$ & $-153.9$ & $0.74$ \\
+action repeat $4$ & $1000$ & $[-0.90, -0.13]$ & $0.885$ & $267$ & $-154.2$ & $0.88$ \\
+action repeat $8$ & $996$ & $[-1.11, 0.11]$ & $0.924$ & $130$ & $\mathbf{-140.5}$ & $\mathbf{1.00}$ \\
+action repeat $16$ & $974$ & $[-1.20, 0.32]$ & $\mathbf{0.940}$ & $49$ & $-145.8$ & $0.89$ \\
+action repeat $8$, no normalization & $996$ & $[-1.11, 0.11]$ & $0.824$ & $130$ & $-145.7$ & $0.90$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \medskip
-\noindent\textbf{Summary.} BCO(0) works on MountainCar, but its performance is governed
-almost entirely by whether the self-supervised interaction data covers the states the
-demonstrator visits. Fixing the input representation and broadening random-policy coverage
-(action repeat $+$ more episodes) takes demonstration-labelling accuracy from $\approx 87\%$
-to $\approx 100\%$ and the success rate from $0.39$ to $0.67$, recovering close to the
-performance of BC with ground-truth actions, consistent with the paper's motivation for
-the post-demonstration iterations of BCO($\alpha$), which address exactly this mismatch.
+\noindent\textbf{How well BCO(0) works.} The baseline configuration is poor: $36\%$ success
+and an average return of $-185.2$. With the coverage fix the method works well: demonstration
+labelling accuracy $0.924$, $20/20$ successful evaluation episodes for every seed, average
+return $-140.5$, and the best single configuration/seed reached an average return of $-120.9$
+with a best individual episode of $-86$. That compares favorably with BC trained on the
+\emph{true} actions in Part 4 ($-145.8$), which is the natural reference point for BCO(0)
+here, and with my own demonstrations (best $-87$). Variance across seeds is large throughout
+(the same configuration can go from $0\%$ to $100\%$ success), which is why every number
+reported here is a $5$-seed mean rather than a single run.
+
+So BCO(0) does solve MountainCar, but its performance is governed almost entirely by whether
+the self-supervised interaction data covers the states the demonstrator visits, and only
+weakly (and non-monotonically) by the size of the inverse dynamics network or how long it
+trains. This is consistent with the paper's motivation for the post-demonstration iterations
+of BCO($\alpha$), which address exactly this mismatch by adding on-policy transitions from
+the states the learner actually reaches.
 
 
 

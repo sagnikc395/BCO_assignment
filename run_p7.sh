@@ -1,8 +1,10 @@
 #!/bin/bash
-# BCO(0) inverse dynamics experiments on MountainCar-v0 (reproducible version).
-# Every configuration runs with the same 5 seeds; each run appends one row to $RESULTS.
+# Part 7: BCO(0) on MountainCar-v0.
+# Sweeps the two things Part 7 asks about, network size and training iterations,
+# and records inverse dynamics accuracy on the demonstration data.
 # The inverse dynamics model is always trained on random interaction data only;
-# the demonstrations are only used to measure its accuracy.
+# the demonstrations are used to measure its accuracy, never to train it.
+# Every configuration runs with the same 5 seeds; each run appends one row to $RESULTS.
 
 set -euo pipefail
 
@@ -26,78 +28,27 @@ run() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# 0. collect demos once (window opens) if demos.pkl does not exist yet.
-#    This run goes to its own file so it does not become an extra row in $RESULTS.
-# ---------------------------------------------------------------------------
+# collect demos once (window opens) if demos.pkl does not exist yet
 if [ ! -f demos.pkl ]; then
-    $PY --num_demos 2 --tag demo_collection --results_file demo_collection.csv
+    $PY --num_demos 5 --tag demo_collection --results_file demo_collection.csv
 fi
 
-# ---------------------------------------------------------------------------
-# 1. baseline (defaults: 5 random episodes, 64 x 2 network, 1000 iters, lr 0.01)
-# ---------------------------------------------------------------------------
+# defaults: 64 x 2 network, 1000 inverse dynamics iters, lr 0.01, 5 random episodes
 run baseline
 
-# ---------------------------------------------------------------------------
-# 2. network width (2 hidden layers, 1000 iters)
-# ---------------------------------------------------------------------------
+# network size: width (2 hidden layers)
 for h in 2 4 8 16 32 128 256; do
     run width --hidden_dim $h
 done
 
-# ---------------------------------------------------------------------------
-# 3. network depth (64 units)
-# ---------------------------------------------------------------------------
+# network size: depth (64 units per layer)
 for l in 1 3 4; do
     run depth --num_layers $l
 done
 
-# ---------------------------------------------------------------------------
-# 4. training iterations
-# ---------------------------------------------------------------------------
+# inverse dynamics training iterations
 for i in 10 25 50 100 250 500 3000; do
     run iters --num_inv_dyn_iters $i
 done
-
-# small network + few iterations: where training accuracy drops below 100%
-run small_short --hidden_dim 4 --num_inv_dyn_iters 50
-run small_short --hidden_dim 4 --num_inv_dyn_iters 250
-
-# ---------------------------------------------------------------------------
-# 5. learning rate
-# ---------------------------------------------------------------------------
-for lr in 0.001 0.1; do
-    run lr --inv_dyn_lr $lr
-done
-
-# ---------------------------------------------------------------------------
-# 6. input normalization off
-# ---------------------------------------------------------------------------
-run normalization --no_normalize
-
-# ---------------------------------------------------------------------------
-# 7. amount of random data (episodes x 200 steps), unchanged starter sampling
-# ---------------------------------------------------------------------------
-for e in 20 50 200; do
-    run data --num_random_episodes $e
-done
-
-# ---------------------------------------------------------------------------
-# 8. coverage of random data: hold each random action for k steps
-#    (still uniformly random actions, no demo information)
-# ---------------------------------------------------------------------------
-for k in 4 8 16; do
-    run action_repeat --action_repeat $k
-done
-run action_repeat_more_data --action_repeat 8 --num_random_episodes 50
-
-# ---------------------------------------------------------------------------
-# 9. BC iterations on (near) perfect labels, so only BC changes
-# ---------------------------------------------------------------------------
-for b in 100 500 1000; do
-    run bc_iters_clean_labels --action_repeat 4 --num_bc_iters $b
-done
-
 
 echo "done: results in $RESULTS"
