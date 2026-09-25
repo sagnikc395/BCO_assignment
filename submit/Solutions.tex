@@ -314,33 +314,38 @@ they are a minority of demonstrations.
 \subsection{Solution}
 I expected the bad demonstration to pull the policy toward always
 accelerating right. That is what happened, and it was enough to break the policy
-entirely. With one all-right demonstration ($-200.0$) and one good demonstration
-($-200.0$ as recorded for that episode), the learned policy never escapes the valley.
-All six evaluation episodes returned $-200.0$, so the average, minimum and maximum
-returns are all $-200.0$.
+entirely. I gave one all-right demonstration (return $-200.0$, the car never leaves the
+valley) and one good demonstration that reached the flag (return $-116.0$). The learned
+policy never escapes the valley: all six evaluation episodes returned $-200.0$, so the
+average, minimum and maximum returns are all $-200.0$.
 
 \begin{table}[h]
 \centering
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\caption{Part 5 BC training loss (1 bad plus 1 good demonstration), sampled every 10 iterations. The loss plateaus near $0.59$ and stops improving.}
+\caption{Part 5 BC training loss (1 bad plus 1 good demonstration), sampled every 10 iterations.}
 \label{tab:p5loss}
 \begin{tabular}{@{}l*{11}{r}@{}}
 \toprule
 iteration & 0 & 10 & 20 & 30 & 40 & 50 & 60 & 70 & 80 & 90 & 99 \\
-BC loss & $1.2432$ & $0.9600$ & $0.7796$ & $0.6149$ & $0.5974$ & $0.5985$ & $0.5966$ & $0.5936$ & $0.5924$ & $0.5921$ & $0.5917$ \\
+BC loss & $0.9332$ & $0.5553$ & $0.4392$ & $0.3991$ & $0.3858$ & $0.3751$ & $0.3644$ & $0.3555$ & $0.3474$ & $0.3399$ & $0.3341$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The BC loss also plateaus at $\approx 0.59$ after about 40 iterations and stops improving,
-which is the signature of \emph{irreducible label noise}: the two demonstrations visit
-overlapping states but label them with different actions, so no deterministic policy can
-fit both. Cross-entropy responds by predicting something close to the state-conditional
-average of the two behaviors, and because the argmax of that average is dominated by the
-``push right'' action (which appears in both the bad demo and parts of the good one), the
-policy just pushes right and never builds momentum. Averaging two valid-but-different
-behaviors gives behavior that is worse than either.
+The training loss is not what fails here. It drops quickly from $0.93$ to about $0.40$
+within 30 iterations and then flattens into a slow decline to $0.33$, i.e.\ the network
+fits the mixed dataset about as well as it fit the single clean demonstration in Part 3
+($0.29$), yet the resulting policy is strictly worse than either demonstrator. The
+residual floor around $0.33$--$0.40$ is \emph{irreducible label noise}: the two
+demonstrations visit overlapping states but label them with different actions, so no
+deterministic policy can fit both. Cross-entropy responds by predicting something close to
+the state-conditional average of the two behaviors, and because the argmax of that average
+is dominated by the ``push right'' action (it is the only action in the bad demo and also
+appears throughout the second half of the good one), the policy just pushes right and never
+builds momentum. Averaging two valid-but-different behaviors gives behavior that is worse
+than either --- and low BC loss is no indicator of it, since the loss is measured on the
+demonstrator's own states, not on the states the learned policy actually reaches.
 
 \medskip
 \noindent\textbf{Why bad demonstrations are a problem.} BC is pure supervised learning on
@@ -501,13 +506,18 @@ avg.\ return & $-200.0$ & $-187.0$ & $-179.3$ & $-182.3$ & $-182.3$ & $-186.3$ &
 \end{table}
 
 Extra capacity was useless or harmful. Only width $2$ genuinely underfits, and it is the
-only configuration whose \emph{training} accuracy fails as well ($0.674$); above that,
-\emph{smaller is better}: width $4$ is the best configuration in the whole size sweep
-($0.849$ demonstration accuracy, $86\%$ success), and widths $32$--$256$ are all at or below
-the $64$-unit baseline. Depth is actively bad: a single hidden layer beats the $2$-layer
-baseline, while $3$ and $4$ layers collapse to $0.02$ and $0.00$ success. This suggests that
-a bigger inverse dynamics model fits the random interaction data more tightly and therefore
-extrapolates worse to the expert's states, which is exactly where it has to work. Training
+only configuration whose \emph{training} accuracy fails as well ($0.674$). Above that the
+trend is not monotone: demonstration accuracy falls steadily from $0.849$ at width $4$ ---
+the best configuration in the whole size sweep, at $86\%$ success --- down to $0.771$ at the
+$64$-unit baseline, and then recovers slightly to $0.790$ and $0.805$ at widths $128$ and
+$256$. So ``smaller is better'' holds only over the range width $4$ to width $64$; the
+sweep as a whole is U-shaped, and the honest summary is that nothing in it beats width $4$.
+Depth is actively bad: a single hidden layer beats the $2$-layer baseline, while $3$ and $4$
+layers collapse to $0.02$ and $0.00$ success. Note that this is not a matter of one model
+fitting the random interaction data better than another: every configuration from width $4$
+upward reaches $1.000$ training accuracy, so they all fit that data perfectly and differ
+only in how they extrapolate --- what action they assign to positions the random policy
+never visited, which is precisely where the demonstration states lie. Training
 longer helps only marginally and saturates after roughly $50$ iterations: going from $50$ to
 $3000$ iterations moves demonstration accuracy from $0.752$ to $0.785$ and does not improve
 return at all, so iterations alone do not close the gap.
@@ -585,8 +595,9 @@ action repeat $8$, no normalization & $996$ & $[-1.11, 0.11]$ & $0.824$ & $130$ 
 \noindent\textbf{How well BCO(0) works.} The baseline configuration is poor: $36\%$ success
 and an average return of $-185.2$. With the coverage fix the method works well: demonstration
 labelling accuracy $0.924$, $20/20$ successful evaluation episodes for every seed, average
-return $-140.5$, and the best single configuration/seed reached an average return of $-120.9$
-with a best individual episode of $-86$. That compares favorably with BC trained on the
+return $-140.5$, and the single best run in the whole sweep (action repeat $2$, seed $0$)
+averaged $-120.9$ over its $20$ evaluation episodes with $100\%$ success and a best episode
+of $-90$; the best individual episode anywhere in the sweep was $-86$. That compares favorably with BC trained on the
 \emph{true} actions in Part 4 ($-145.8$), which is the natural reference point for BCO(0)
 here, and with my own demonstrations (best $-87$). Variance across seeds is large throughout
 (the same configuration can go from $0\%$ to $100\%$ success), which is why every number
